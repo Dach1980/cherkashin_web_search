@@ -3,6 +3,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
+from .contracts import FetchResponse, SearchResponse
 from .config import (
     DEFAULT_MAX_PAGE_CHARS,
     DEFAULT_MAX_SEARCH_RESULTS,
@@ -16,13 +17,13 @@ mcp = FastMCP(SERVER_NAME)
 
 
 @mcp.tool()
-def search_web(query: str, max_results: int = DEFAULT_MAX_SEARCH_RESULTS) -> dict:
+def search_web(query: str, max_results: int = DEFAULT_MAX_SEARCH_RESULTS) -> SearchResponse:
     """Search the web and return page titles, URLs, and snippets."""
     return web_search(query=query, max_results=max_results)
 
 
 @mcp.tool()
-def fetch_web_page(url: str, max_chars: int = DEFAULT_MAX_PAGE_CHARS) -> dict:
+def fetch_web_page(url: str, max_chars: int = DEFAULT_MAX_PAGE_CHARS) -> FetchResponse:
     """Fetch a web page and return its title and readable text."""
     return web_fetch(url=url, max_chars=max_chars)
 
