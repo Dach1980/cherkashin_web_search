@@ -92,3 +92,40 @@ def test_http_error_does_not_expose_exception_details(monkeypatch):
     assert result["ok"] is False
     assert result["error"] == "Request failed: ConnectError."
     assert "private network detail" not in result["error"]
+
+
+def test_fetch_rejects_bool_max_chars():
+    result = fetch_module.web_fetch("https://example.com", max_chars=True)
+    assert result["ok"] is False
+    assert "integer" in result["error"]
+
+
+def test_fetch_marks_text_as_truncated(monkeypatch):
+    html = b"<html><head><title>Long</title></head><body><main>abcdefghij</main></body></html>"
+    monkeypatch.setattr(fetch_module, "_validate_public_url", lambda url: None)
+    monkeypatch.setattr(
+        fetch_module.httpx,
+        "stream",
+        lambda *args, **kwargs: FakeStreamResponse(chunks=[html]),
+    )
+
+    result = fetch_module.web_fetch("https://example.com/page", max_chars=5)
+
+    assert result["ok"] is True
+    assert result["text"] == "abcde"
+    assert result["truncated"] is True
+
+
+def test_fetch_reports_http_status_error(monkeypatch):
+    monkeypatch.setattr(fetch_module, "_validate_public_url", lambda url: None)
+    monkeypatch.setattr(
+        fetch_module.httpx,
+        "stream",
+        lambda *args, **kwargs: FakeStreamResponse(status_code=503, headers={"content-type": "text/html"}),
+    )
+
+    result = fetch_module.web_fetch("https://example.com/page")
+
+    assert result["ok"] is False
+    assert result["status_code"] == 503
+    assert "503" in result["error"]
