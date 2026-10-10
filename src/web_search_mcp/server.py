@@ -1,6 +1,14 @@
+import logging
+import sys
+
 from mcp.server.fastmcp import FastMCP
 
-from .config import DEFAULT_MAX_PAGE_CHARS, DEFAULT_MAX_SEARCH_RESULTS, SERVER_NAME
+from .config import (
+    DEFAULT_MAX_PAGE_CHARS,
+    DEFAULT_MAX_SEARCH_RESULTS,
+    LOG_LEVEL,
+    SERVER_NAME,
+)
 from .web_fetch import web_fetch
 from .web_search import web_search
 
@@ -19,8 +27,19 @@ def fetch_web_page(url: str, max_chars: int = DEFAULT_MAX_PAGE_CHARS) -> dict:
     return web_fetch(url=url, max_chars=max_chars)
 
 
+def configure_logging() -> None:
+    """Send diagnostic logs to stderr so stdio remains available to MCP."""
+    logging.basicConfig(
+        level=LOG_LEVEL,
+        stream=sys.stderr,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
 def main() -> None:
     """Run the MCP server over standard input and output."""
+    configure_logging()
+    logging.getLogger(__name__).info("Starting MCP server: %s", SERVER_NAME)
     mcp.run(transport="stdio")
 
 
