@@ -1,9 +1,12 @@
+import logging
 from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
 
 from .config import DEFAULT_MAX_SEARCH_RESULTS, DEFAULT_TIMEOUT_SECONDS
+
+logger = logging.getLogger(__name__)
 
 SEARCH_URL = "https://html.duckduckgo.com/html/"
 USER_AGENT = "Mozilla/5.0 (compatible; LocalWebSearch/1.0)"
@@ -25,7 +28,8 @@ def web_search(query: str, max_results: int = DEFAULT_MAX_SEARCH_RESULTS) -> dic
         )
         response.raise_for_status()
     except httpx.HTTPError as error:
-        return {"ok": False, "query": query, "results": [], "error": f"Search request failed: {error}"}
+        logger.warning("Search request failed (%s).", type(error).__name__)
+        return {"ok": False, "query": query, "results": [], "error": f"Search request failed: {type(error).__name__}."}
 
     soup = BeautifulSoup(response.text, "html.parser")
     results = []
@@ -42,4 +46,5 @@ def web_search(query: str, max_results: int = DEFAULT_MAX_SEARCH_RESULTS) -> dic
         results.append({"title": title, "url": urljoin(SEARCH_URL, href), "snippet": description})
         if len(results) >= max_results:
             break
+    logger.info("Search completed: %d result(s).", len(results))
     return {"ok": True, "query": query.strip(), "results": results, "error": None}
