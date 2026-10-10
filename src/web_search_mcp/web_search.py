@@ -5,6 +5,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from .config import DEFAULT_MAX_SEARCH_RESULTS, DEFAULT_TIMEOUT_SECONDS
+from .contracts import SearchResponse, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ SEARCH_URL = "https://html.duckduckgo.com/html/"
 USER_AGENT = "Mozilla/5.0 (compatible; LocalWebSearch/1.0)"
 
 
-def web_search(query: str, max_results: int = DEFAULT_MAX_SEARCH_RESULTS) -> dict:
+def web_search(query: str, max_results: int = DEFAULT_MAX_SEARCH_RESULTS) -> SearchResponse:
     """Find pages and return title, URL, and snippet fields."""
     if not isinstance(query, str) or not query.strip():
         return {"ok": False, "query": str(query), "results": [], "error": "Query must be a non-empty string."}
@@ -32,7 +33,7 @@ def web_search(query: str, max_results: int = DEFAULT_MAX_SEARCH_RESULTS) -> dic
         return {"ok": False, "query": query, "results": [], "error": f"Search request failed: {type(error).__name__}."}
 
     soup = BeautifulSoup(response.text, "html.parser")
-    results = []
+    results: list[SearchResult] = []
     for item in soup.select(".result"):
         link = item.select_one(".result__title a")
         snippet = item.select_one(".result__snippet")
