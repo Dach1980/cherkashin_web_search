@@ -8,12 +8,13 @@ import httpx
 from bs4 import BeautifulSoup
 
 from .config import DEFAULT_MAX_PAGE_CHARS, DEFAULT_TIMEOUT_SECONDS, MAX_REDIRECTS, MAX_RESPONSE_BYTES
+from .contracts import FetchResponse
 
 USER_AGENT = "Mozilla/5.0 (compatible; LocalWebFetch/1.1)"
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
 
-def _error_result(url: str, error: str, status_code: int | None = None) -> dict:
+def _error_result(url: str, error: str, status_code: int | None = None) -> FetchResponse:
     """Возвращает единый формат ошибки."""
     return {
         "ok": False, "url": url, "status_code": status_code, "title": "",
@@ -88,7 +89,7 @@ def web_fetch(
     url: str,
     max_chars: int = DEFAULT_MAX_PAGE_CHARS,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
-) -> dict:
+) -> FetchResponse:
     """Загружает публичную HTML-страницу с лимитом редиректов и размера ответа."""
     if not isinstance(url, str):
         return _error_result("", "URL must be a string.")
