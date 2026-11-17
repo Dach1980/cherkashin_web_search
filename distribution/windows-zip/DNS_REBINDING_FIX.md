@@ -59,3 +59,43 @@
 - провести интеграционный тест MCP и LM Studio.
 
 Успешный unit-тест подтверждает проверки кода и построения запроса, но не заменяет реальную сетевую проверку, проверку proxy/TLS в целевой среде и интеграцию с LM Studio. До этих проверок нельзя объявлять DNS-защиту полностью принятой или готовой к коммерческому релизу.
+
+## Результаты реальных сетевых и MCP smoke tests
+
+Дата: 2026-11-17 (UTC)  
+Успешный commit: `94308100296aedca62073d61853bd5af90e88597`
+
+GitHub Actions:
+- [Network and MCP smoke test #3 — SUCCESS](https://github.com/Dach1980/cherkashin_web_search/actions/runs/44190601035)
+- [Python tests #18 — SUCCESS](https://github.com/Dach1980/cherkashin_web_search/actions/runs/44190601070)
+
+Фактический вывод smoke test:
+- Прямой HTTPS-запрос к `https://example.com` через DNS-pinned реализацию: HTTP 200, title `Example Domain`, извлечено 156 символов.
+- MCP initialize через stdio: успешно, protocol version `2025-11-25`.
+- `list_tools`: обнаружены `fetch_web_page` и `search_web`.
+- MCP-вызов `fetch_web_page`: HTTP 200, title `Example Domain`.
+- MCP-вызов `search_web`: успешно, возвращено 2 результата.
+- Полный smoke test завершился сообщением `SMOKE TEST COMPLETED`.
+- Unit suite на том же commit завершился успешно.
+
+Во время первых запусков smoke test выявил две реальные проблемы, которые были исправлены:
+1. HTTPX `Response` не является контекстным менеджером; закрытие streaming response заменено на явный `response.close()` в `finally`.
+2. В Python 3.11 Pydantic требует `TypedDict` из `typing_extensions`; контракты переведены на этот импорт.
+
+## Что подтверждено и что ещё не подтверждено
+
+**Подтверждено на GitHub-hosted Ubuntu runner / Python 3.11:**
+- реальное HTTPS соединение с публичным сайтом через DNS pinning;
+- успешная TLS-проверка сертификата домена при соединении с закреплённым IP;
+- реальный MCP stdio initialize/list_tools/call_tool;
+- фактические вызовы обоих MCP-инструментов;
+- успешный ответ DuckDuckGo в момент теста (2 результата);
+- автоматические unit-тесты.
+
+**Остаётся проверить отдельно:**
+- работу через конкретный корпоративный/пользовательский HTTP(S) proxy: smoke test выполнялся без специально настроенного proxy;
+- реальную доступность IPv6 в среде пользователя: unit-тест закрепления IPv6 есть, но успешный live-run не фиксировал, какой IP family был выбран;
+- запуск из LM Studio GUI на Windows 10/11 x64, включая сохранение MCP-конфигурации и повторное подключение;
+- Windows packaged build и чистую установку ZIP.
+
+Следовательно, сетевой и MCP stdio этап успешно пройден на Linux CI. Это не является подтверждением Windows/LM Studio GUI совместимости или работы за любым пользовательским proxy.
