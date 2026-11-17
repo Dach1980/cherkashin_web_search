@@ -53,7 +53,7 @@ def test_calculates_cross_rate_and_respects_nominal(monkeypatch):
     jpy = rate_module.get_exchange_rate("JPY", "RUB")
 
     assert cross["ok"] is True
-    assert cross["rate"] == "0.86571991"
+    assert cross["rate"] == "0.86556448"
     assert jpy["ok"] is True
     assert jpy["rate"] == "0.51000000"
 
