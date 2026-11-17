@@ -30,3 +30,15 @@ class FetchResponse(TypedDict):
     text: str
     truncated: bool
     error: str | None
+
+
+class ExchangeRateResponse(TypedDict):
+    """Official exchange rate and its effective date."""
+
+    ok: bool
+    base_currency: str
+    quote_currency: str
+    rate: str | None
+    effective_date: str | None
+    source: str
+    error: str | None
