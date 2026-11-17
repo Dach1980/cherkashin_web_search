@@ -41,7 +41,7 @@ async def run(executable: Path) -> None:
 
             listed = await asyncio.wait_for(session.list_tools(), timeout=30)
             names = {tool.name for tool in listed.tools}
-            expected = {"search_web", "fetch_web_page"}
+            expected = {"search_web", "fetch_web_page", "get_exchange_rate"}
             if not expected.issubset(names):
                 raise AssertionError(f"Missing tools: {sorted(expected - names)}")
             print(f"MCP tools: {', '.join(sorted(names))}")
@@ -70,6 +70,24 @@ async def run(executable: Path) -> None:
                     timeout=45,
                 )
             )
+            rate = parse_payload(
+                await asyncio.wait_for(
+                    session.call_tool(
+                        "get_exchange_rate",
+                        {"base_currency": "USD", "quote_currency": "RUB"},
+                    ),
+                    timeout=45,
+                )
+            )
+            if not rate.get("ok") or not rate.get("rate") or not rate.get("effective_date"):
+                raise AssertionError(f"get_exchange_rate failed: {rate.get('error')}")
+            if "cbr.ru" not in rate.get("source", ""):
+                raise AssertionError(f"Unexpected exchange-rate source: {rate.get('source')}")
+            print(
+                "get_exchange_rate: OK; "
+                f"USD/RUB={rate.get('rate')}; effective_date={rate.get('effective_date')}"
+            )
+
             if searched.get("ok"):
                 print(f"search_web: OK; results={len(searched.get('results', []))}")
             else:
