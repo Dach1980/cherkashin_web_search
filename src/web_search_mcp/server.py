@@ -31,7 +31,7 @@ def fetch_web_page(url: str, max_chars: int = DEFAULT_MAX_PAGE_CHARS) -> FetchRe
 
 @mcp.tool()
 def get_exchange_rate(base_currency: str = "USD", quote_currency: str = "RUB") -> dict[str, object]:
-    """Get the official Bank of Russia rate: quote currency units per one base currency."""
+    """Use for current exchange-rate questions. Returns the official Bank of Russia rate, effective date, and source; defaults to USD/RUB. Do not guess a rate if this tool fails."""
     return fetch_exchange_rate(base_currency=base_currency, quote_currency=quote_currency)
 
 
