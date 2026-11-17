@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "scripts/network_mcp_smoke.py"
+      - "scripts/proxy_smoke.py"
       - ".github/workflows/network-smoke.yml"
       - "src/**"
       - "requirements.txt"
@@ -13,7 +14,7 @@ on:
 jobs:
   network-mcp-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -28,3 +29,5 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Run live HTTPS and MCP stdio smoke test
         run: python scripts/network_mcp_smoke.py
+      - name: Run live HTTPS CONNECT proxy smoke test
+        run: python scripts/proxy_smoke.py
