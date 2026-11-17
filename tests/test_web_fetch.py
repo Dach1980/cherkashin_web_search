@@ -221,7 +221,7 @@ def test_connection_pins_public_ipv6_address(monkeypatch):
 
     def fake_getaddrinfo(host, port, type):
         return [
-            (10, 1, 6, "", (ipv6, port, 0, 0)),
+            (fetch_module.socket.AF_INET6, fetch_module.socket.SOCK_STREAM, 6, "", (ipv6, port, 0, 0)),
         ]
 
     monkeypatch.setattr(fetch_module.socket, "getaddrinfo", fake_getaddrinfo)
