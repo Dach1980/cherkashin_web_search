@@ -8,7 +8,7 @@ import httpx
 from .config import DEFAULT_TIMEOUT_SECONDS
 
 CBR_DAILY_URL = "https://www.cbr.ru/scripts/XML_daily.asp"
-CBR_SOURCE_URL = "https://www.cbr.ru/development/sxml/"
+CBR_SOURCE_URL = CBR_DAILY_URL
 MAX_CBR_RESPONSE_BYTES = 2_000_000
 RATE_QUANTUM = Decimal("0.00000001")
 
