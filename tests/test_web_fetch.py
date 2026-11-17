@@ -21,6 +21,9 @@ class FakeStreamResponse:
     def iter_bytes(self):
         yield from self._chunks
 
+    def close(self):
+        pass
+
 
 class FakeClient:
     def __init__(self, response=None, on_send=None, **kwargs):
