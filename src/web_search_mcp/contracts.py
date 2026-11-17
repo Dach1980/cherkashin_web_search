@@ -1,6 +1,6 @@
 """Структуры данных, возвращаемые инструментами MCP."""
 
-from typing import TypedDict
+from typing_extensions import TypedDict
 
 
 class SearchResult(TypedDict):
