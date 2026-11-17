@@ -1,4 +1,4 @@
-"""Ограниченная загрузка публичных HTML-страниц для учебного MCP-сервера."""
+"""Ограниченная загрузка публичных HTML-страниц с DNS pinning."""
 
 import ipaddress
 import socket
@@ -22,28 +22,34 @@ def _error_result(url: str, error: str, status_code: int | None = None) -> Fetch
     }
 
 
-def _validate_public_url(url: str) -> str | None:
-    """Проверяет схему, учётные данные, имя хоста и полученные DNS IP-адреса."""
+def _resolve_public_address(url: str) -> tuple[str | None, str | None]:
+    """Проверяет URL и возвращает конкретный публичный IP для закрепления соединения.
+
+    Все DNS-ответы проверяются. Если хотя бы один адрес не является глобальным,
+    запрос отклоняется. HTTP-клиент далее получает URL с IP-литералом и не
+    выполняет повторное разрешение исходного hostname.
+    """
     try:
         parts = urlsplit(url)
         port = parts.port
     except ValueError:
-        return "URL contains an invalid host or port."
+        return None, "URL contains an invalid host or port."
 
-    if parts.scheme.lower() not in ("http", "https"):
-        return "Only http and https URLs are accepted."
+    scheme = parts.scheme.lower()
+    if scheme not in ("http", "https"):
+        return None, "Only http and https URLs are accepted."
     if not parts.hostname:
-        return "URL must contain a hostname."
+        return None, "URL must contain a hostname."
     if parts.username is not None or parts.password is not None:
-        return "URLs containing username or password are not accepted."
+        return None, "URLs containing username or password are not accepted."
 
     hostname = parts.hostname.rstrip(".").lower()
     if not hostname:
-        return "URL must contain a hostname."
+        return None, "URL must contain a hostname."
     if hostname == "localhost" or hostname.endswith((".localhost", ".local", ".internal")):
-        return "Local hostnames are not allowed."
+        return None, "Local hostnames are not allowed."
 
-    effective_port = port or (443 if parts.scheme.lower() == "https" else 80)
+    effective_port = port or (443 if scheme == "https" else 80)
     try:
         literal_ip = ipaddress.ip_address(hostname)
     except ValueError:
@@ -51,24 +57,45 @@ def _validate_public_url(url: str) -> str | None:
 
     if literal_ip is not None:
         if not literal_ip.is_global:
-            return "Private, loopback, link-local, and non-global IP addresses are not allowed."
-        return None
+            return None, "Private, loopback, link-local, and non-global IP addresses are not allowed."
+        return str(literal_ip), None
 
     try:
-        addresses = socket.getaddrinfo(hostname, effective_port, type=socket.SOCK_STREAM)
+        address_info_list = socket.getaddrinfo(
+            hostname, effective_port, type=socket.SOCK_STREAM
+        )
     except socket.gaierror:
-        return "Hostname could not be resolved."
-    if not addresses:
-        return "Hostname did not resolve to any address."
+        return None, "Hostname could not be resolved."
+    if not address_info_list:
+        return None, "Hostname did not resolve to any address."
 
-    for address_info in addresses:
+    public_addresses: list[str] = []
+    for address_info in address_info_list:
         try:
             parsed_address = ipaddress.ip_address(address_info[4][0])
-        except ValueError:
-            return "DNS returned an invalid IP address."
+        except (IndexError, ValueError):
+            return None, "DNS returned an invalid IP address."
         if not parsed_address.is_global:
-            return "Hostname resolves to a private or non-global IP address."
-    return None
+            return None, "Hostname resolves to a private or non-global IP address."
+        normalized = str(parsed_address)
+        if normalized not in public_addresses:
+            public_addresses.append(normalized)
+
+    # Выбор первого адреса детерминирован. Важно, что ниже в HTTP-клиент
+    # передаётся именно IP, а не hostname, поэтому повторного DNS lookup нет.
+    return public_addresses[0], None
+
+
+def _host_header(url: httpx.URL) -> str:
+    """Формирует Host исходного URL, сохраняя нестандартный порт."""
+    hostname = url.host
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+    if url.port is not None:
+        default_port = 443 if url.scheme == "https" else 80
+        if url.port != default_port:
+            hostname = f"{hostname}:{url.port}"
+    return hostname
 
 
 def _extract_page(html: str, max_chars: int) -> tuple[str, str, bool]:
@@ -90,7 +117,7 @@ def web_fetch(
     max_chars: int = DEFAULT_MAX_PAGE_CHARS,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> FetchResponse:
-    """Загружает публичную HTML-страницу с лимитом редиректов и размера ответа."""
+    """Загружает публичную HTML-страницу с DNS pinning, лимитами и проверкой редиректов."""
     if not isinstance(url, str):
         return _error_result("", "URL must be a string.")
     url = url.strip()
@@ -107,48 +134,63 @@ def web_fetch(
 
     current_url = url
     for redirect_number in range(MAX_REDIRECTS + 1):
-        validation_error = _validate_public_url(current_url)
+        pinned_ip, validation_error = _resolve_public_address(current_url)
         if validation_error:
             return _error_result(current_url, validation_error)
+
         try:
-            with httpx.stream(
-                "GET", current_url, timeout=float(timeout), follow_redirects=False,
-                headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"},
-            ) as response:
-                if response.status_code in REDIRECT_STATUSES:
-                    location = response.headers.get("location")
-                    if not location:
-                        return _error_result(current_url, "Redirect response did not include a Location header.", response.status_code)
-                    if redirect_number >= MAX_REDIRECTS:
-                        return _error_result(current_url, "Too many redirects.", response.status_code)
-                    next_url = urljoin(current_url, location)
-                else:
-                    next_url = None
-                    if response.status_code >= 400:
-                        return _error_result(current_url, f"HTTP error: {response.status_code}", response.status_code)
-                    content_type = response.headers.get("content-type", "").lower()
-                    if "text/html" not in content_type and "application/xhtml+xml" not in content_type:
-                        return _error_result(current_url, f"Expected HTML, received {content_type or 'unknown content type'}.", response.status_code)
-                    content_length = response.headers.get("content-length")
-                    if content_length:
-                        try:
-                            if int(content_length) > MAX_RESPONSE_BYTES:
+            original_url = httpx.URL(current_url)
+            pinned_url = original_url.copy_with(host=pinned_ip.encode("ascii"))
+            headers = {
+                "User-Agent": USER_AGENT,
+                "Accept": "text/html,application/xhtml+xml",
+                "Host": _host_header(original_url),
+            }
+            extensions = {}
+            if original_url.scheme == "https":
+                # HTTPX/httpcore используют это имя для SNI и проверки сертификата,
+                # хотя TCP-соединение устанавливается к IP из pinned_url.
+                extensions["sni_hostname"] = original_url.host
+
+            with httpx.Client(timeout=float(timeout), follow_redirects=False) as client:
+                request = client.build_request(
+                    "GET", pinned_url, headers=headers, extensions=extensions
+                )
+                with client.send(request, stream=True) as response:
+                    if response.status_code in REDIRECT_STATUSES:
+                        location = response.headers.get("location")
+                        if not location:
+                            return _error_result(current_url, "Redirect response did not include a Location header.", response.status_code)
+                        if redirect_number >= MAX_REDIRECTS:
+                            return _error_result(current_url, "Too many redirects.", response.status_code)
+                        next_url = urljoin(current_url, location)
+                    else:
+                        next_url = None
+                        if response.status_code >= 400:
+                            return _error_result(current_url, f"HTTP error: {response.status_code}", response.status_code)
+                        content_type = response.headers.get("content-type", "").lower()
+                        if "text/html" not in content_type and "application/xhtml+xml" not in content_type:
+                            return _error_result(current_url, f"Expected HTML, received {content_type or 'unknown content type'}.", response.status_code)
+                        content_length = response.headers.get("content-length")
+                        if content_length:
+                            try:
+                                if int(content_length) > MAX_RESPONSE_BYTES:
+                                    return _error_result(current_url, "Response body exceeds the configured byte limit.", response.status_code)
+                            except ValueError:
+                                pass
+                        body = bytearray()
+                        for chunk in response.iter_bytes():
+                            if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
                                 return _error_result(current_url, "Response body exceeds the configured byte limit.", response.status_code)
-                        except ValueError:
-                            pass
-                    body = bytearray()
-                    for chunk in response.iter_bytes():
-                        if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
-                            return _error_result(current_url, "Response body exceeds the configured byte limit.", response.status_code)
-                        body.extend(chunk)
-                    html = bytes(body).decode(response.encoding or "utf-8", errors="replace")
-                    title, text, truncated = _extract_page(html, max_chars)
-                    if not text:
-                        return _error_result(current_url, "No readable text found in HTML.", response.status_code)
-                    return {
-                        "ok": True, "url": current_url, "status_code": response.status_code,
-                        "title": title, "text": text, "truncated": truncated, "error": None,
-                    }
+                            body.extend(chunk)
+                        html = bytes(body).decode(response.encoding or "utf-8", errors="replace")
+                        title, text, truncated = _extract_page(html, max_chars)
+                        if not text:
+                            return _error_result(current_url, "No readable text found in HTML.", response.status_code)
+                        return {
+                            "ok": True, "url": current_url, "status_code": response.status_code,
+                            "title": title, "text": text, "truncated": truncated, "error": None,
+                        }
         except httpx.TimeoutException:
             return _error_result(current_url, "Request timed out.")
         except httpx.HTTPError as error:
