@@ -22,7 +22,7 @@ application sends the DNS-pinned IP rather than the original hostname.
 
 Commit: `f76b2b48037c435129031933e8db23c37ee2e2d6`
 
-- Python tests run #23: **SUCCESS**.
+- Python tests run #22: **SUCCESS**.
 - Network and MCP smoke test run #5: **FAILURE in the proxy step**.
 - The preceding direct HTTPS + MCP stdio smoke step in the same workflow passed.
 - The local proxy received a CONNECT request to a pinned public IP
