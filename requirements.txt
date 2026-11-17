@@ -1,5 +1,5 @@
-# Учебные зависимости; точные версии зафиксируем после проверки совместимости.
-httpx
-beautifulsoup4
-mcp
-pytest
+# Runtime dependencies pinned for the first validated compatibility baseline.
+# MCP SDK v2 is intentionally excluded: this project currently uses the v1 FastMCP API.
+httpx==0.28.1
+beautifulsoup4==4.15.0
+mcp==1.30.0
