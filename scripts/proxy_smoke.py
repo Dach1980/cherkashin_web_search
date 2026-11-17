@@ -1,19 +1,22 @@
 """Live HTTPS proxy smoke test for the DNS-pinned fetch implementation.
 
-Starts a local HTTP CONNECT proxy which tunnels directly to the requested
-destination IP. The test verifies that HTTPX honors HTTPS_PROXY while the
-application still pins the destination IP and preserves TLS hostname checks.
+Starts a local HTTP CONNECT proxy. It chains through the runner's pre-existing
+egress proxy when one is configured, so the test remains compatible with
+hosted CI networks that prohibit direct outbound sockets.
 """
 
+import base64
 import os
 import select
 import socket
 import socketserver
+import sys
 import threading
+import urllib.request
 from contextlib import contextmanager
+from urllib.parse import urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-import sys
 sys.path.insert(0, os.path.join(ROOT, "src"))
 
 from web_search_mcp.web_fetch import _resolve_public_address, web_fetch
@@ -48,8 +51,9 @@ class ConnectProxyHandler(socketserver.BaseRequestHandler):
 
         self.server.targets.append((host, port))
         try:
-            upstream = socket.create_connection((host, port), timeout=15)
-        except OSError:
+            upstream = self._open_upstream(host, port)
+        except OSError as error:
+            self.server.errors.append(f"{type(error).__name__}: {error}")
             self.request.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
             return
 
@@ -72,19 +76,58 @@ class ConnectProxyHandler(socketserver.BaseRequestHandler):
                         return
                     destination.sendall(data)
 
+    def _open_upstream(self, host, port):
+        proxy_url = self.server.upstream_proxy
+        if not proxy_url:
+            return socket.create_connection((host, port), timeout=15)
+
+        parsed = urlsplit(proxy_url)
+        if parsed.scheme.lower() != "http":
+            raise OSError("CI proxy chaining currently supports HTTP proxy URLs only")
+        proxy_host = parsed.hostname
+        proxy_port = parsed.port or 80
+        upstream = socket.create_connection((proxy_host, proxy_port), timeout=15)
+
+        authority = f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
+        request = [
+            f"CONNECT {authority} HTTP/1.1",
+            f"Host: {authority}",
+            "Proxy-Connection: Keep-Alive",
+        ]
+        if parsed.username is not None:
+            credentials = f"{parsed.username}:{parsed.password or ''}".encode()
+            token = base64.b64encode(credentials).decode("ascii")
+            request.append(f"Proxy-Authorization: Basic {token}")
+        upstream.sendall(("\r\n".join(request) + "\r\n\r\n").encode("ascii"))
+
+        response = bytearray()
+        while b"\r\n\r\n" not in response:
+            chunk = upstream.recv(4096)
+            if not chunk or len(response) > 16384:
+                upstream.close()
+                raise OSError("Upstream proxy returned an incomplete CONNECT response")
+            response.extend(chunk)
+        status = bytes(response).split(b"\r\n", 1)[0]
+        if b" 200 " not in status:
+            upstream.close()
+            raise OSError(f"Upstream proxy rejected CONNECT: {status.decode('ascii', 'replace')}")
+        return upstream
+
 
 class ConnectProxyServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
 
-    def __init__(self, address):
+    def __init__(self, address, upstream_proxy):
         super().__init__(address, ConnectProxyHandler)
         self.targets = []
+        self.errors = []
+        self.upstream_proxy = upstream_proxy
 
 
 @contextmanager
-def local_connect_proxy():
-    server = ConnectProxyServer(("127.0.0.1", 0))
+def local_connect_proxy(upstream_proxy):
+    server = ConnectProxyServer(("127.0.0.1", 0), upstream_proxy)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -101,9 +144,11 @@ def main():
     if error or not pinned_ip:
         raise SystemExit(f"DNS validation failed before proxy test: {error}")
 
+    # Preserve the CI runner's outbound proxy for the local CONNECT relay.
+    upstream_proxy = urllib.request.getproxies().get("https")
     original_env = os.environ.copy()
     try:
-        with local_connect_proxy() as (proxy_url, proxy):
+        with local_connect_proxy(upstream_proxy) as (proxy_url, proxy):
             os.environ["HTTPS_PROXY"] = proxy_url
             os.environ["HTTP_PROXY"] = proxy_url
             os.environ["https_proxy"] = proxy_url
@@ -114,10 +159,14 @@ def main():
             os.environ.pop("all_proxy", None)
 
             print(f"Configured local HTTP CONNECT proxy: {proxy_url}")
+            print(f"Chained to runner egress proxy: {'yes' if upstream_proxy else 'no'}")
             print(f"Expected pinned destination: {pinned_ip}:443")
             result = web_fetch(test_url, max_chars=2000, timeout=20)
             if not result.get("ok"):
-                raise SystemExit(f"HTTPS proxy fetch failed: {result.get('error')}")
+                raise SystemExit(
+                    f"HTTPS proxy fetch failed: {result.get('error')}; "
+                    f"CONNECT targets={proxy.targets!r}; proxy errors={proxy.errors!r}"
+                )
 
             expected = (pinned_ip, 443)
             if expected not in proxy.targets:
