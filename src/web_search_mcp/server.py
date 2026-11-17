@@ -10,6 +10,7 @@ from .config import (
     LOG_LEVEL,
     SERVER_NAME,
 )
+from .exchange_rate import get_exchange_rate as fetch_exchange_rate
 from .web_fetch import web_fetch
 from .web_search import web_search
 
@@ -26,6 +27,12 @@ def search_web(query: str, max_results: int = DEFAULT_MAX_SEARCH_RESULTS) -> Sea
 def fetch_web_page(url: str, max_chars: int = DEFAULT_MAX_PAGE_CHARS) -> FetchResponse:
     """Fetch a web page and return its title and readable text."""
     return web_fetch(url=url, max_chars=max_chars)
+
+
+@mcp.tool()
+def get_exchange_rate(base_currency: str = "USD", quote_currency: str = "RUB") -> dict[str, object]:
+    """Get the official Bank of Russia rate: quote currency units per one base currency."""
+    return fetch_exchange_rate(base_currency=base_currency, quote_currency=quote_currency)
 
 
 def configure_logging() -> None:
