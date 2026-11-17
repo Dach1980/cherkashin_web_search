@@ -1,0 +1,69 @@
+name: Windows x64 packaged MCP build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "packaging/**"
+      - "requirements.txt"
+      - ".github/workflows/windows-build.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "packaging/**"
+      - "requirements.txt"
+      - ".github/workflows/windows-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build and smoke-test Windows x64 MCP
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11 x64
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          architecture: "x64"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install runtime and build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller==6.16.0
+
+      - name: Build onedir executable
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onedir --console --name WebSearchServer --paths src --collect-all mcp --collect-all pydantic --collect-all httpx --collect-all bs4 --collect-all certifi --distpath dist --workpath build packaging/launcher.py
+
+      - name: Verify expected executable exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist/WebSearchServer/WebSearchServer.exe" -PathType Leaf)) {
+            throw "PyInstaller did not produce dist/WebSearchServer/WebSearchServer.exe"
+          }
+          Get-ChildItem "dist/WebSearchServer" -Recurse | Select-Object FullName, Length
+
+      - name: Smoke-test packaged executable over MCP stdio
+        shell: pwsh
+        run: python packaging/windows_smoke.py dist/WebSearchServer/WebSearchServer.exe
+
+      - name: Upload complete onedir folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebSearchServer-Windows-x64
+          path: dist/WebSearchServer/
+          if-no-files-found: error
+          retention-days: 14
