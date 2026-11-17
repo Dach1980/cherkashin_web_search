@@ -140,7 +140,7 @@ def web_fetch(
 
         try:
             original_url = httpx.URL(current_url)
-            pinned_url = original_url.copy_with(host=pinned_ip.encode("ascii"))
+            pinned_url = original_url.copy_with(host=pinned_ip)
             headers = {
                 "User-Agent": USER_AGENT,
                 "Accept": "text/html,application/xhtml+xml",
