@@ -156,7 +156,8 @@ def web_fetch(
                 request = client.build_request(
                     "GET", pinned_url, headers=headers, extensions=extensions
                 )
-                with client.send(request, stream=True) as response:
+                response = client.send(request, stream=True)
+                try:
                     if response.status_code in REDIRECT_STATUSES:
                         location = response.headers.get("location")
                         if not location:
@@ -191,6 +192,8 @@ def web_fetch(
                             "ok": True, "url": current_url, "status_code": response.status_code,
                             "title": title, "text": text, "truncated": truncated, "error": None,
                         }
+                finally:
+                    response.close()
         except httpx.TimeoutException:
             return _error_result(current_url, "Request timed out.")
         except httpx.HTTPError as error:
