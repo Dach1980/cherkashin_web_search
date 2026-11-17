@@ -214,3 +214,55 @@ def test_fetch_reports_http_status_error(monkeypatch):
     assert result["ok"] is False
     assert result["status_code"] == 503
     assert "503" in result["error"]
+
+
+def test_connection_pins_public_ipv6_address(monkeypatch):
+    ipv6 = "2001:4860:4860::8888"
+
+    def fake_getaddrinfo(host, port, type):
+        return [
+            (10, 1, 6, "", (ipv6, port, 0, 0)),
+        ]
+
+    monkeypatch.setattr(fetch_module.socket, "getaddrinfo", fake_getaddrinfo)
+    client = FakeClient()
+    monkeypatch.setattr(fetch_module.httpx, "Client", lambda **kwargs: client)
+
+    result = fetch_module.web_fetch("https://example.com/ipv6")
+
+    assert result["ok"] is True
+    assert client.request.url.host == ipv6
+    assert client.request.headers["host"] == "example.com"
+    assert client.request.extensions["sni_hostname"] == "example.com"
+
+
+def test_redirect_resolves_and_pins_each_new_hostname(monkeypatch):
+    dns_calls = []
+
+    def fake_getaddrinfo(host, port, type):
+        dns_calls.append((host, port))
+        ip = PUBLIC_IP if host == "example.com" else "8.8.8.8"
+        return [(2, 1, 6, "", (ip, port))]
+
+    monkeypatch.setattr(fetch_module.socket, "getaddrinfo", fake_getaddrinfo)
+    requests = []
+    responses = [
+        FakeStreamResponse(status_code=302, headers={"location": "https://other.example/next"}),
+        FakeStreamResponse(chunks=[b"<html><body><main>Final page</main></body></html>"]),
+    ]
+
+    class SequencedClient(FakeClient):
+        def send(self, request, stream=False):
+            requests.append(request)
+            return responses.pop(0)
+
+    monkeypatch.setattr(fetch_module.httpx, "Client", lambda **kwargs: SequencedClient())
+
+    result = fetch_module.web_fetch("https://example.com/start")
+
+    assert result["ok"] is True
+    assert [request.url.host for request in requests] == [PUBLIC_IP, "8.8.8.8"]
+    assert [request.extensions["sni_hostname"] for request in requests] == [
+        "example.com", "other.example"
+    ]
+    assert dns_calls == [("example.com", 443), ("other.example", 443)]
