@@ -13,7 +13,7 @@ def _enable_process_trace() -> None:
 
     def emit(label: str, details: str = "") -> None:
         try:
-            sys.stderr.write(f"[process-trace] {label}{details}\n")
+            sys.stderr.write(f"[process-trace] {label}{details}\\n")
             traceback.print_stack(file=sys.stderr)
             sys.stderr.flush()
         except Exception:
@@ -45,8 +45,8 @@ def _enable_process_trace() -> None:
             )
 
         _winapi.CreateProcess = traced_create_process
-    except (ImportError, AttributeError):
-        emit("_winapi.CreateProcess unavailable")
+    except (ImportError, AttributeError) as exc:
+        emit("_winapi.CreateProcess unavailable; exception=", repr(exc))
 
     # multiprocessing.popen_spawn_win32 imports CreateProcess directly from
     # _winapi. Patching only _winapi.CreateProcess misses that cached alias.
@@ -78,8 +78,11 @@ def _enable_process_trace() -> None:
             return original_launch(self, process_obj)
 
         spawn_win32.Popen._launch = traced_launch
-    except (ImportError, AttributeError):
-        emit("multiprocessing Windows spawn hooks unavailable")
+    except (ImportError, AttributeError) as exc:
+        emit(
+            "multiprocessing Windows spawn hooks unavailable; exception=",
+            repr(exc),
+        )
 
     try:
         from multiprocessing.process import BaseProcess
@@ -91,8 +94,8 @@ def _enable_process_trace() -> None:
             return original_process_start(self, *args, **kwargs)
 
         BaseProcess.start = traced_process_start
-    except (ImportError, AttributeError):
-        emit("multiprocessing BaseProcess.start unavailable")
+    except (ImportError, AttributeError) as exc:
+        emit("multiprocessing BaseProcess.start unavailable; exception=", repr(exc))
 
 
 _enable_process_trace()
