@@ -3,13 +3,14 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
-from .contracts import FetchResponse, SearchResponse
+from .contracts import DateTimeResponse, ExchangeRateResponse, FetchResponse, SearchResponse
 from .config import (
     DEFAULT_MAX_PAGE_CHARS,
     DEFAULT_MAX_SEARCH_RESULTS,
     LOG_LEVEL,
     SERVER_NAME,
 )
+from .current_datetime import get_current_datetime as read_current_datetime
 from .exchange_rate import get_exchange_rate as fetch_exchange_rate
 from .web_fetch import web_fetch
 from .web_search import web_search
@@ -30,9 +31,18 @@ def fetch_web_page(url: str, max_chars: int = DEFAULT_MAX_PAGE_CHARS) -> FetchRe
 
 
 @mcp.tool()
-def get_exchange_rate(base_currency: str = "USD", quote_currency: str = "RUB") -> dict[str, object]:
+def get_exchange_rate(
+    base_currency: str = "USD",
+    quote_currency: str = "RUB",
+) -> ExchangeRateResponse:
     """Use for current exchange-rate questions. Returns the official Bank of Russia rate, effective date, and source; defaults to USD/RUB. Do not guess a rate if this tool fails."""
     return fetch_exchange_rate(base_currency=base_currency, quote_currency=quote_currency)
+
+
+@mcp.tool()
+def get_current_datetime() -> DateTimeResponse:
+    """Use for questions about the current date, time, or day of the week. Returns the live system clock on the computer running this MCP server, including its local timezone and UTC offset. This is not necessarily the user's physical location timezone."""
+    return read_current_datetime()
 
 
 def configure_logging() -> None:
