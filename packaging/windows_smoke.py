@@ -29,6 +29,7 @@ def parse_payload(result):
 
 
 async def run(executable: Path) -> None:
+    print("Windows MCP smoke test: starting child-process diagnostics")
     server = StdioServerParameters(
         command=str(executable.resolve()),
         args=[],
