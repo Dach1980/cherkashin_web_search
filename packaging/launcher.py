@@ -13,7 +13,7 @@ def _enable_process_trace() -> None:
 
     def emit(label: str, details: str = "") -> None:
         try:
-            sys.stderr.write(f"[process-trace] {label}{details}\\n")
+            sys.stderr.write(f"[process-trace] {label}{details}\n")
             traceback.print_stack(file=sys.stderr)
             sys.stderr.flush()
         except Exception:
