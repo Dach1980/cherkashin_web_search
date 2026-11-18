@@ -48,26 +48,24 @@ def _enable_process_trace() -> None:
     except (ImportError, AttributeError) as exc:
         emit("_winapi.CreateProcess unavailable; exception=", repr(exc))
 
-    # In Python 3.11, popen_spawn_win32 calls _winapi.CreateProcess;
-    # the module itself does not expose a CreateProcess attribute.
-    # Trace the launch boundary independently so one unavailable hook cannot
-    # prevent the remaining diagnostics from being installed.
+    # CPython 3.11's Windows multiprocessing Popen starts the child in
+    # __init__; it has no _launch method and imports _winapi as a module.
     try:
         import multiprocessing.popen_spawn_win32 as spawn_win32
 
-        original_launch = spawn_win32.Popen._launch
+        original_spawn_init = spawn_win32.Popen.__init__
 
-        def traced_launch(self, process_obj):
+        def traced_spawn_init(self, process_obj):
             emit(
-                "multiprocessing.popen_spawn_win32.Popen._launch; process=",
+                "multiprocessing.popen_spawn_win32.Popen.__init__; process=",
                 repr(process_obj),
             )
-            return original_launch(self, process_obj)
+            return original_spawn_init(self, process_obj)
 
-        spawn_win32.Popen._launch = traced_launch
+        spawn_win32.Popen.__init__ = traced_spawn_init
     except (ImportError, AttributeError) as exc:
         emit(
-            "multiprocessing Windows Popen._launch unavailable; exception=",
+            "multiprocessing Windows Popen.__init__ unavailable; exception=",
             repr(exc),
         )
 
