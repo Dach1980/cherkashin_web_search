@@ -42,3 +42,18 @@ class ExchangeRateResponse(TypedDict):
     effective_date: str | None
     source: str
     error: str | None
+
+
+class DateTimeResponse(TypedDict):
+    """Current local system date/time and its timezone information."""
+
+    ok: bool
+    local_datetime: str
+    utc_datetime: str
+    date: str
+    time: str
+    weekday: int
+    timezone: str
+    utc_offset: str
+    unix_timestamp: int
+    source: str
