@@ -22,7 +22,6 @@ def _enable_process_trace() -> None:
 
     emit("launcher entered before freeze_support; argv=", repr(sys.argv))
 
-    # Install before freeze_support(): frozen worker bootstrap may exit early.
     original_popen_init = subprocess.Popen.__init__
 
     def traced_popen_init(self, *args, **kwargs):
@@ -48,6 +47,39 @@ def _enable_process_trace() -> None:
         _winapi.CreateProcess = traced_create_process
     except (ImportError, AttributeError):
         emit("_winapi.CreateProcess unavailable")
+
+    # multiprocessing.popen_spawn_win32 imports CreateProcess directly from
+    # _winapi. Patching only _winapi.CreateProcess misses that cached alias.
+    try:
+        import multiprocessing.popen_spawn_win32 as spawn_win32
+
+        original_spawn_create_process = spawn_win32.CreateProcess
+
+        def traced_spawn_create_process(
+            application_name, command_line, *args, **kwargs
+        ):
+            emit(
+                "multiprocessing.popen_spawn_win32.CreateProcess; application_name=",
+                repr(application_name) + "; command_line=" + repr(command_line),
+            )
+            return original_spawn_create_process(
+                application_name, command_line, *args, **kwargs
+            )
+
+        spawn_win32.CreateProcess = traced_spawn_create_process
+
+        original_launch = spawn_win32.Popen._launch
+
+        def traced_launch(self, process_obj):
+            emit(
+                "multiprocessing.popen_spawn_win32.Popen._launch; process=",
+                repr(process_obj),
+            )
+            return original_launch(self, process_obj)
+
+        spawn_win32.Popen._launch = traced_launch
+    except (ImportError, AttributeError):
+        emit("multiprocessing Windows spawn hooks unavailable")
 
     try:
         from multiprocessing.process import BaseProcess
