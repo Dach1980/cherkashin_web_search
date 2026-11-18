@@ -46,7 +46,7 @@ jobs:
       - name: Build onedir executable
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onedir --console --name WebSearchServer --paths src --hidden-import multiprocessing.popen_spawn_win32 --hidden-import multiprocessing.spawn --collect-all mcp.server --collect-all mcp.shared --collect-all pydantic --collect-all httpx --collect-all bs4 --collect-all certifi --distpath dist --workpath build packaging/launcher.py
+          python -m PyInstaller --noconfirm --clean --onedir --console --name WebSearchServer --paths src --runtime-hook packaging/pyi_rth_process_trace.py --hidden-import multiprocessing.popen_spawn_win32 --hidden-import multiprocessing.spawn --collect-all mcp.server --collect-all mcp.shared --collect-all pydantic --collect-all httpx --collect-all bs4 --collect-all certifi --distpath dist --workpath build packaging/launcher.py
 
       - name: Verify expected executable exists
         shell: pwsh
