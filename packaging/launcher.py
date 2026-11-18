@@ -1,4 +1,4 @@
-""""Точка входа для упаковки MCP-сервера через PyInstaller."""
+"""Точка входа для упаковки MCP-сервера через PyInstaller."""
 
 
 def _enable_process_trace() -> None:
@@ -13,17 +13,16 @@ def _enable_process_trace() -> None:
 
     def emit(label: str, details: str = "") -> None:
         try:
-            sys.stderr.write(f"[process-trace] {label}{details}\\n")
+            sys.stderr.write(f"[process-trace] {label}{details}\n")
             traceback.print_stack(file=sys.stderr)
             sys.stderr.flush()
         except Exception:
             # Diagnostics must never prevent process startup or shutdown.
             pass
 
-    emit("launcher entered before freeze_support; argv=" , repr(sys.argv))
+    emit("launcher entered before freeze_support; argv=", repr(sys.argv))
 
-    # multiprocessing.freeze_support() may enter a worker bootstrap and exit
-    # before application imports. Install tracing first so that path is visible.
+    # Install before freeze_support(): frozen worker bootstrap may exit early.
     original_popen_init = subprocess.Popen.__init__
 
     def traced_popen_init(self, *args, **kwargs):
