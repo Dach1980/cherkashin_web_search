@@ -19,7 +19,7 @@ def _enable_process_trace() -> None:
     original_popen_init = subprocess.Popen.__init__
 
     def traced_popen_init(self, *args, **kwargs):
-        sys.stderr.write("[process-trace] subprocess.Popen called\\n")
+        sys.stderr.write("[process-trace] subprocess.Popen called\n")
         traceback.print_stack(file=sys.stderr)
         return original_popen_init(self, *args, **kwargs)
 
@@ -34,7 +34,7 @@ def _enable_process_trace() -> None:
 
     def traced_process_start(self, *args, **kwargs):
         sys.stderr.write(
-            f"[process-trace] multiprocessing.Process.start: {self!r}\\n"
+            f"[process-trace] multiprocessing.Process.start: {self!r}\n"
         )
         traceback.print_stack(file=sys.stderr)
         return original_process_start(self, *args, **kwargs)
