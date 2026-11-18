@@ -210,8 +210,11 @@ async def run(executable: Path) -> None:
         diagnostics.append(f"MCP session failed: {failure!r}")
     if returncode != 0:
         diagnostics.append(f"Packaged server exited with code {returncode}")
+    # Diagnostic runtime-hook records are JSON lines and may contain
+    # formatted tracebacks for deliberately probed optional imports. Ignore
+    # those records; fail only on an actual traceback emitted as stderr text.
     if re.search(
-        r"Traceback \(most recent call last\):|"
+        r"(?m)^(?!\[process-trace\]).*Traceback \(most recent call last\):|"
         r"ValueError:\s*I/O operation on closed file|"
         r"I/O operation on closed file",
         child_stderr,
