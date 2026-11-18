@@ -170,6 +170,27 @@ if _ENABLED:
             )
             return self._stream.close()
 
+        def flush(self):
+            _emit(
+                "standard-stream-flush-before",
+                stream=self._name,
+                underlying_closed=getattr(self._stream, "closed", None),
+                caller_stack="".join(traceback.format_stack(limit=30)),
+            )
+            try:
+                result = self._stream.flush()
+            except BaseException as exc:
+                _emit(
+                    "standard-stream-flush-exception",
+                    stream=self._name,
+                    underlying_closed=getattr(self._stream, "closed", None),
+                    exception=repr(exc),
+                    traceback="".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+                )
+                raise
+            _emit("standard-stream-flush-after", stream=self._name)
+            return result
+
         def __enter__(self):
             self._stream.__enter__()
             return self
