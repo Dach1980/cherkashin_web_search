@@ -48,25 +48,12 @@ def _enable_process_trace() -> None:
     except (ImportError, AttributeError) as exc:
         emit("_winapi.CreateProcess unavailable; exception=", repr(exc))
 
-    # multiprocessing.popen_spawn_win32 imports CreateProcess directly from
-    # _winapi. Patching only _winapi.CreateProcess misses that cached alias.
+    # In Python 3.11, popen_spawn_win32 calls _winapi.CreateProcess;
+    # the module itself does not expose a CreateProcess attribute.
+    # Trace the launch boundary independently so one unavailable hook cannot
+    # prevent the remaining diagnostics from being installed.
     try:
         import multiprocessing.popen_spawn_win32 as spawn_win32
-
-        original_spawn_create_process = spawn_win32.CreateProcess
-
-        def traced_spawn_create_process(
-            application_name, command_line, *args, **kwargs
-        ):
-            emit(
-                "multiprocessing.popen_spawn_win32.CreateProcess; application_name=",
-                repr(application_name) + "; command_line=" + repr(command_line),
-            )
-            return original_spawn_create_process(
-                application_name, command_line, *args, **kwargs
-            )
-
-        spawn_win32.CreateProcess = traced_spawn_create_process
 
         original_launch = spawn_win32.Popen._launch
 
@@ -80,7 +67,7 @@ def _enable_process_trace() -> None:
         spawn_win32.Popen._launch = traced_launch
     except (ImportError, AttributeError) as exc:
         emit(
-            "multiprocessing Windows spawn hooks unavailable; exception=",
+            "multiprocessing Windows Popen._launch unavailable; exception=",
             repr(exc),
         )
 
