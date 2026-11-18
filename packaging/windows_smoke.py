@@ -212,7 +212,7 @@ async def run(executable: Path) -> None:
         diagnostics.append(f"Packaged server exited with code {returncode}")
     if re.search(
         r"Traceback \(most recent call last\):|"
-        r"ValueError:\\s*I/O operation on closed file|"
+        r"ValueError:\s*I/O operation on closed file|"
         r"I/O operation on closed file",
         child_stderr,
         flags=re.IGNORECASE,
