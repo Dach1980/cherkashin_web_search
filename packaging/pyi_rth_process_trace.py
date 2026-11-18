@@ -101,6 +101,92 @@ if _ENABLED:
 
     builtins.exec = _traced_exec
 
+    # Capture eval() separately: some frozen bootstrap paths evaluate a string
+    # without going through builtins.exec().
+    _original_eval = builtins.eval
+
+    def _traced_eval(source, *args, **kwargs):
+        source_text = source if isinstance(source, str) else repr(source)
+        _emit("builtins-eval-before", source_type=type(source).__name__, source=source_text)
+        try:
+            result = _original_eval(source, *args, **kwargs)
+        except BaseException as exc:
+            _emit(
+                "builtins-eval-exception",
+                source_type=type(source).__name__,
+                source=source_text,
+                exception=repr(exc),
+                traceback="".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+            )
+            raise
+        _emit("builtins-eval-after", source_type=type(source).__name__, source=source_text)
+        return result
+
+    builtins.eval = _traced_eval
+
+    # Preserve the original unraisable-exception handler while recording errors
+    # raised by finalizers and __del__ methods.
+    _original_unraisablehook = sys.unraisablehook
+
+    def _traced_unraisablehook(unraisable):
+        _emit(
+            "sys-unraisablehook",
+            err_msg=getattr(unraisable, "err_msg", None),
+            exception=repr(getattr(unraisable, "exc_value", None)),
+            exception_type=getattr(getattr(unraisable, "exc_type", None), "__name__", None),
+            traceback="".join(
+                traceback.format_exception(
+                    getattr(unraisable, "exc_type", None),
+                    getattr(unraisable, "exc_value", None),
+                    getattr(unraisable, "exc_traceback", None),
+                )
+            ),
+            object=repr(getattr(unraisable, "object", None)),
+        )
+        return _original_unraisablehook(unraisable)
+
+    sys.unraisablehook = _traced_unraisablehook
+
+    # Transparently proxy the four standard stream references only in diagnostic
+    # builds. All operations, including close(), are delegated to the same
+    # underlying stream; close() additionally records its caller stack.
+    class _TracedStream:
+        def __init__(self, stream, name):
+            self._stream = stream
+            self._name = name
+
+        def __getattr__(self, name):
+            return getattr(self._stream, name)
+
+        @property
+        def closed(self):
+            return self._stream.closed
+
+        def close(self):
+            _emit(
+                "standard-stream-close",
+                stream=self._name,
+                caller_stack="".join(traceback.format_stack(limit=30)),
+            )
+            return self._stream.close()
+
+        def __enter__(self):
+            self._stream.__enter__()
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return self._stream.__exit__(exc_type, exc, tb)
+
+    _stream_proxies = {}
+    for _stream_name in ("stdin", "stdout", "__stdin__", "__stdout__"):
+        _stream = getattr(sys, _stream_name, None)
+        if _stream is not None:
+            _proxy = _stream_proxies.get(id(_stream))
+            if _proxy is None:
+                _proxy = _TracedStream(_stream, _stream_name)
+                _stream_proxies[id(_stream)] = _proxy
+            setattr(sys, _stream_name, _proxy)
+
     # Wrap callbacks at registration time. This preserves LIFO execution and
     # reports the callback's identity plus stream state immediately before and
     # after it runs. unregister() is adapted so callers can still unregister
