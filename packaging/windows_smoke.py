@@ -41,7 +41,7 @@ async def run(executable: Path) -> None:
 
             listed = await asyncio.wait_for(session.list_tools(), timeout=30)
             names = {tool.name for tool in listed.tools}
-            expected = {"search_web", "fetch_web_page", "get_exchange_rate"}
+            expected = {"search_web", "fetch_web_page", "get_exchange_rate", "get_current_datetime"}
             if not expected.issubset(names):
                 raise AssertionError(f"Missing tools: {sorted(expected - names)}")
             print(f"MCP tools: {', '.join(sorted(names))}")
@@ -86,6 +86,24 @@ async def run(executable: Path) -> None:
             print(
                 "get_exchange_rate: OK; "
                 f"USD/RUB={rate.get('rate')}; effective_date={rate.get('effective_date')}"
+            )
+
+            current_time = parse_payload(
+                await asyncio.wait_for(
+                    session.call_tool("get_current_datetime", {}),
+                    timeout=15,
+                )
+            )
+            required_time_fields = {
+                "local_datetime", "utc_datetime", "date", "time",
+                "timezone", "utc_offset", "unix_timestamp",
+            }
+            if not current_time.get("ok") or not required_time_fields.issubset(current_time):
+                raise AssertionError(f"get_current_datetime failed: {current_time}")
+            print(
+                "get_current_datetime: OK; "
+                f"local={current_time.get('local_datetime')}; "
+                f"timezone={current_time.get('timezone')}"
             )
 
             if searched.get("ok"):
