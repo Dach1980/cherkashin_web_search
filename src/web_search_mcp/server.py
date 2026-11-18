@@ -1,7 +1,12 @@
+import io
 import logging
+import os
 import sys
 
+import anyio
+
 from mcp.server.fastmcp import FastMCP
+from mcp.server.stdio import stdio_server
 
 from .contracts import DateTimeResponse, ExchangeRateResponse, FetchResponse, SearchResponse
 from .config import (
@@ -54,11 +59,51 @@ def configure_logging() -> None:
     )
 
 
+def _duplicate_stdio_streams():
+    """Create UTF-8 streams backed by duplicated OS descriptors.
+
+    MCP's stdio transport wraps the supplied streams in TextIOWrapper objects.
+    Giving those wrappers duplicated descriptors prevents their finalization
+    from closing the process-wide stdin/stdout used by the PyInstaller
+    bootloader during interpreter shutdown.
+    """
+    stdin_fd = os.dup(sys.stdin.fileno())
+    stdout_fd = os.dup(sys.stdout.fileno())
+    stdin_raw = os.fdopen(stdin_fd, "rb", buffering=0)
+    stdout_raw = os.fdopen(stdout_fd, "wb", buffering=0)
+    stdin_buffer = io.BufferedReader(stdin_raw)
+    stdout_buffer = io.BufferedWriter(stdout_raw)
+    stdin_text = io.TextIOWrapper(
+        stdin_buffer, encoding="utf-8", errors="replace"
+    )
+    stdout_text = io.TextIOWrapper(stdout_buffer, encoding="utf-8")
+    return stdin_text, stdout_text
+
+
+async def _run_stdio_with_duplicated_descriptors() -> None:
+    """Run the normal MCP stdio session without transferring stdio ownership."""
+    stdin_text, stdout_text = _duplicate_stdio_streams()
+    stdin = anyio.wrap_file(stdin_text)
+    stdout = anyio.wrap_file(stdout_text)
+    try:
+        async with stdio_server(stdin=stdin, stdout=stdout) as (read_stream, write_stream):
+            await mcp._mcp_server.run(
+                read_stream,
+                write_stream,
+                mcp._mcp_server.create_initialization_options(),
+            )
+    finally:
+        # Close only our duplicated descriptors; the process standard streams
+        # remain open for PyInstaller and CPython finalization.
+        stdin_text.close()
+        stdout_text.close()
+
+
 def main() -> None:
     """Run the MCP server over standard input and output."""
     configure_logging()
     logging.getLogger(__name__).info("Starting MCP server: %s", SERVER_NAME)
-    mcp.run(transport="stdio")
+    anyio.run(_run_stdio_with_duplicated_descriptors)
 
 
 if __name__ == "__main__":
