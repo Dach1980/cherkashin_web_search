@@ -58,6 +58,8 @@ jobs:
 
       - name: Smoke-test packaged executable over MCP stdio
         shell: pwsh
+        env:
+          WEB_SEARCH_PROCESS_TRACE: "1"
         run: python packaging/windows_smoke.py dist/WebSearchServer/WebSearchServer.exe
 
       - name: Upload complete onedir folder
