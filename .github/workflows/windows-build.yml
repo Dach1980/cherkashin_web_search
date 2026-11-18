@@ -1,4 +1,5 @@
 name: Windows x64 packaged MCP build
+# Re-run packaged smoke tests after stdio descriptor ownership fix.
 
 on:
   push:
