@@ -103,14 +103,14 @@ Cherkashin Web Search MCP
 
 ## Быстрый старт
 
-1. Скачайте Windows x64 архив сборки из [GitHub Actions — Windows build](https://github.com/Dach1980/cherkashin_web_search/actions/runs/44237302878). В разделе **Artifacts** выберите `WebSearchServer-Windows-x64`.
+1. Скачайте готовую Windows x64 сборку из [GitHub Release v1.0.0](https://github.com/Dach1980/cherkashin_web_search/releases/tag/v1.0.0): в разделе **Assets** выберите `WebSearchServer-Windows-x64.zip`.
 2. Распакуйте архив в постоянную папку, например `C:\\MCP\\CherkashinWebSearch\\`.
 3. Убедитесь, что `WebSearchServer.exe` находится рядом с каталогом `_internal`. Не отделяйте EXE от этого каталога.
 4. В LM Studio откройте **Integrations** и добавьте локальный MCP-сервер, указав путь к `WebSearchServer.exe` в соответствии с интерфейсом вашей версии LM Studio.
 5. Включите интеграцию `mcp/cherkashin-web-search` и разрешите четыре инструмента.
 6. Выберите локальную модель с поддержкой tool calling и отправьте запрос из раздела [Проверка работы](#проверка-работы).
 
-**Примечание о загрузке:** Windows x64 архив в указанном запуске GitHub Actions — это CI artifact, а не постоянный релиз. GitHub хранит artifacts ограниченное время. Если ссылка на artifact уже недоступна, откройте [список запусков Windows build](https://github.com/Dach1980/cherkashin_web_search/actions/workflows/windows-build.yml) и скачайте artifact из последнего успешного запуска. Для постоянного распространения сборки следует публиковать отдельный GitHub Release.
+**Постоянная загрузка:** готовая Windows x64 сборка опубликована в GitHub Release [v1.0.0](https://github.com/Dach1980/cherkashin_web_search/releases/tag/v1.0.0). Прямая ссылка на архив: [WebSearchServer-Windows-x64.zip](https://github.com/Dach1980/cherkashin_web_search/releases/download/v1.0.0/WebSearchServer-Windows-x64.zip).
 
 ## Установка в LM Studio
 
